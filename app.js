@@ -86,16 +86,11 @@ class TodoApp {
     this.registerError = document.getElementById("register-error");
 
     this.loginButton.addEventListener("click", this.login.bind(this));
-    this.loginButton.addEventListener("click", () => {
-      this.login();
-    });
-
     this.googleAuthButton.addEventListener("click", this.googleAuth.bind(this));
     this.microsoftAuthButton.addEventListener(
       "click",
       this.microsoftAuth.bind(this)
     );
-
     this.registerButton.addEventListener("click", this.register.bind(this));
     this.logoutButton.addEventListener("click", this.logout.bind(this));
     this.emailVerifiedButton.addEventListener(
