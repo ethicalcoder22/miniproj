@@ -172,11 +172,7 @@ class TodoApp {
         this.profileDisplayNameInput.value = user.displayName;
         this.profilePhotoURL.value = user.photoURL;
 
-        this.googleAuth();
         this.getUserProfile();
-        this.emailVerification();
-        this.updateProfileModal();
-        this.updateProfile();
         this.loadTodoList();
       } else {
         this.loading.style.display = "none";
@@ -192,47 +188,36 @@ class TodoApp {
   }
 
   async googleAuth() {
-    const user = auth.currentUser;
-
-    if (!user) {
-      await signInWithPopup(auth, googleProvider)
-        .then((result) => {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          const token = credential.accessToken;
-          const user = result.user;
-          const displayName = user.displayName;
-          const email = user.email;
-          const photoURL = user.photoURL;
-        })
-        .catch((error) => {
-          console.error(error.message);
-        });
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error(error.message);
     }
   }
 
   async microsoftAuth() {
-    const user = auth.currentUser;
-
-    if (!user) {
-      try {
-        const provider = new OAuthProvider("microsoft.com");
-        await signInWithPopup(auth, provider);
-      } catch (error) {
-        console.error(error.message);
-      }
+    try {
+      await signInWithPopup(auth, microsoftProvider);
+    } catch (error) {
+      console.error(error.message);
     }
   }
 
   emailVerification() {
     const user = auth.currentUser;
-    if (user.emailVerified) {
-      this.emailVerifiedButton.style.display = "none";
-    } else {
+    if (user && !user.emailVerified) {
       this.emailVerifiedButton.style.display = "block";
-
       this.emailVerifiedButton.addEventListener("click", () => {
-        sendEmailVerification(user);
+        sendEmailVerification(user)
+          .then(() => {
+            console.log("Verification email sent.");
+          })
+          .catch((error) => {
+            console.error(error.message);
+          });
       });
+    } else {
+      this.emailVerifiedButton.style.display = "none";
     }
   }
 
@@ -302,7 +287,7 @@ class TodoApp {
     }
 
     const urlRegex = /^(http|https):\/\/\S+$/;
-    if (!urlRegex.test(photoURL)) {
+    if (photoURL && !urlRegex.test(photoURL)) {
       this.profileUpdateButton.disabled = true;
       return false;
     }
@@ -311,274 +296,176 @@ class TodoApp {
     return true;
   }
 
-  checkProfileInputs() {
-    const displayNameValue = this.profileDisplayNameInput.value;
-    const photoURLValue = this.profilePhotoURL.value;
-
-    if (displayNameValue === "" && photoURLValue === "") {
-      this.profileUpdateButton.disabled = true;
-      return;
-    }
-
-    const displayNameRegex = /^[A-Za-z\s]+$/;
-    if (!displayNameRegex.test(displayNameValue)) {
-      this.profileUpdateButton.disabled = true;
-      return;
-    }
-
-    const urlRegex = /^(http|https):\/\/\S+$/;
-    if (!urlRegex.test(photoURLValue)) {
-      this.profileUpdateButton.disabled = true;
-      return;
-    }
-
-    this.profileUpdateButton.disabled = false;
-  }
-
-  checkLoginInputs() {
-    const emailValue = this.loginEmail.value;
-    const passwordValue = this.loginPassword.value;
-    this.loginButton.disabled = !(emailValue && passwordValue);
-  }
-
-  checkRegisterInputs() {
-    const emailValue = this.registerEmail.value;
-    const passwordValue = this.registerPassword.value;
-    this.registerButton.disabled = !(emailValue && passwordValue);
-  }
-
   async login() {
+    this.loginError.innerHTML = "";
+
+    const email = this.loginEmail.value;
+    const password = this.loginPassword.value;
+
     try {
-      const loginEmail = this.loginEmail.value;
-      const loginPassword = this.loginPassword.value;
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(loginEmail)) {
-        this.loginError.innerHTML = "Enter a valid e-mail address.";
-        return;
-      }
-
-      if (loginPassword.length < 6) {
-        this.loginError.innerHTML = "Password must be at least 6 characters.";
-        return;
-      }
-
-      await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
-
-      this.loginEmail.value = "";
-      this.loginPassword.value = "";
-
-      return true;
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      if (error.code === "auth/wrong-password") {
-        this.loginError.innerHTML = "Wrong password.";
-      } else if (error.code === "auth/user-not-found") {
-        this.loginError.innerHTML = "User not found.";
-      } else {
-        console.log(error.message);
-      }
+      this.loginError.innerHTML = error.message;
+    }
+  }
+
+  async register() {
+    this.registerError.innerHTML = "";
+
+    const email = this.registerEmail.value;
+    const password = this.registerPassword.value;
+
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      this.registerError.innerHTML = error.message;
     }
   }
 
   async logout() {
-    await signOut(auth)
-      .then(() => {
-        this.profileDisplayNameInput.value = "";
-        this.profilePhotoURL.value = "";
-
-        this.loginEmail.value = "";
-        this.loginPassword.value = "";
-        this.registerEmail.value = "";
-        this.registerPassword.value = "";
-
-        this.loginButton.disabled = true;
-        this.registerButton.disabled = true;
-        this.addTodoButton.disabled = true;
-        this.profileUpdateButton.disabled = true;
-
-        this.todoInput.value = "";
-
-        this.todoEmailVerifiedError.style.display = "none";
-
-        return auth;
-      })
-      .catch((error) => {
-        console.log(error.message);
-      });
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.log(error.message);
+    }
   }
 
-  async register() {
-    try {
-      const registerEmail = this.registerEmail.value;
-      const registerPassword = this.registerPassword.value;
+  checkLoginInputs() {
+    const email = this.loginEmail.value;
+    const password = this.loginPassword.value;
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(registerEmail)) {
-        this.registerError.innerHTML = "Enter a valid e-mail address.";
-        return;
-      }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(email) && password.length >= 6) {
+      this.loginButton.disabled = false;
+    } else {
+      this.loginButton.disabled = true;
+    }
+  }
 
-      if (registerPassword.length < 6) {
-        this.registerError.innerHTML =
-          "Password must be at least 6 characters.";
-        return;
-      }
+  checkRegisterInputs() {
+    const email = this.registerEmail.value;
+    const password = this.registerPassword.value;
 
-      await createUserWithEmailAndPassword(
-        auth,
-        registerEmail,
-        registerPassword
-      );
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(email) && password.length >= 6) {
+      this.registerButton.disabled = false;
+    } else {
+      this.registerButton.disabled = true;
+    }
+  }
 
-      this.registerEmail.value = "";
-      this.registerPassword.value = "";
+  checkProfileInputs() {
+    const displayName = this.profileDisplayNameInput.value;
+    const photoURL = this.profilePhotoURL.value;
 
-      return true;
-    } catch (error) {
-      if (error.code === "auth/email-already-in-use") {
-        this.registerError.innerHTML = "E-mail already in use.";
-      } else {
-        console.log(error.message);
-      }
+    if (this.isProfileInputValid(displayName, photoURL)) {
+      this.profileUpdateButton.disabled = false;
+    } else {
+      this.profileUpdateButton.disabled = true;
+    }
+  }
+
+  checkTodoInput() {
+    const todoInputValue = this.todoInput.value;
+    if (todoInputValue) {
+      this.addTodoButton.disabled = false;
+    } else {
+      this.addTodoButton.disabled = true;
     }
   }
 
   loadTodoList() {
     const user = auth.currentUser;
     if (user) {
-      const userId = user.uid;
-      const todosRef = query(
+      const todosQuery = query(
         collection(db, "todos"),
-        where("userId", "==", userId),
+        where("userId", "==", user.uid),
         orderBy("createdAt", "desc")
       );
 
-      onSnapshot(todosRef, (querySnapshot) => {
+      onSnapshot(todosQuery, (snapshot) => {
         this.todoList.innerHTML = "";
-
-        querySnapshot.forEach((docs) => {
-          const data = docs.data();
-          const todoItem = document.createElement("div");
-          todoItem.classList.add("todoItem");
-
-          const todoText = document.createElement("span");
-          todoText.textContent = data.text;
-          todoItem.appendChild(todoText);
-
-          todoText.addEventListener("click", () => {
-            const newCompletedValue = !data.completed;
-            updateDoc(doc(db, "todos", docs.id), {
-              completed: newCompletedValue,
-            });
-          });
-
-          todoText.classList.add(data.completed ? "completed" : "notCompleted");
-
-          const todoButtons = document.createElement("div");
-          todoButtons.classList.add("todoButtons");
-
-          const editButton = document.createElement("button");
-          editButton.classList.add("editButton");
-          editButton.textContent = "Edit";
-          editButton.addEventListener("click", () => {
-            this.editTodo(data, docs.id, todoText, todoItem);
-          });
-          todoButtons.appendChild(editButton);
-
-          const deleteButton = document.createElement("button");
-          deleteButton.classList.add("deleteButton");
-          deleteButton.textContent = "Delete";
-          deleteButton.addEventListener("click", () => {
-            deleteDoc(doc(db, "todos", docs.id));
-          });
-
-          todoButtons.appendChild(deleteButton);
-          todoItem.appendChild(todoButtons);
-          this.todoList.appendChild(todoItem);
+        snapshot.forEach((doc) => {
+          this.renderTodoItem(doc.id, doc.data());
         });
       });
     }
   }
 
-  editTodo(data, todoId, currentText, todoItem) {
-    const todoText = currentText.textContent;
-
-    const inputElement = document.createElement("input");
-    inputElement.type = "text";
-    inputElement.value = todoText;
-    inputElement.classList.add("editInput");
-
-    const todoButtons = todoItem.querySelector(".todoButtons");
-    todoButtons.style.display = "none";
-    const editButtons = document.createElement("div");
-
-    const saveButton = document.createElement("button");
-    saveButton.classList.add("saveButton");
-    saveButton.textContent = "Save";
-    saveButton.addEventListener("click", () => {
-      const newText = inputElement.value;
-      updateDoc(doc(db, "todos", todoId), { text: newText });
-
-      inputElement.style.display = "none";
-      editButtons.style.display = "none";
-
-      currentText.textContent = newText;
-      currentText.style.display = "inline";
-
-      todoButtons.style.display = "inline";
-    });
-
-    const cancelButton = document.createElement("button");
-    cancelButton.classList.add("cancelButton");
-    cancelButton.textContent = "Cancel";
-    cancelButton.addEventListener("click", () => {
-      inputElement.style.display = "none";
-      editButtons.style.display = "none";
-
-      currentText.style.display = "inline";
-
-      todoButtons.style.display = "inline";
-    });
-
-    inputElement.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        saveButton.click();
-      }
-    });
-
-    editButtons.appendChild(saveButton);
-    editButtons.appendChild(cancelButton);
-
-    todoItem.appendChild(inputElement);
-    todoItem.appendChild(editButtons);
-
-    currentText.style.display = "none";
-  }
-
-  checkTodoInput() {
-    const todoText = this.todoInput.value;
-    this.addTodoButton.disabled = todoText === "";
-  }
-
   async addTodo() {
-    const todoText = this.todoInput.value;
-    const user = auth.currentUser;
+    const todo = this.todoInput.value;
 
-    if (user && user.emailVerified) {
-      const todoRef = await addDoc(collection(db, "todos"), {
+    const user = auth.currentUser;
+    if (!user) {
+      return;
+    }
+
+    if (!user.emailVerified) {
+      this.todoEmailVerifiedError.style.display = "block";
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "todos"), {
         userId: user.uid,
-        text: todoText,
-        completed: false,
+        todo: todo,
         createdAt: serverTimestamp(),
       });
 
       this.todoInput.value = "";
+      this.addTodoButton.disabled = true;
+    } catch (error) {
+      console.error(error.message);
+    }
+  }
 
-      return todoRef;
-    } else if (!user.emailVerified) {
-      this.todoEmailVerifiedError.style.display = "block";
-      this.todoEmailVerifiedError.innerHTML =
-        "You cannot add a todo without confirming the e-mail address.";
+  renderTodoItem(todoId, todoData) {
+    const todoItem = document.createElement("li");
+    todoItem.classList.add("todo-item");
+
+    const todoText = document.createElement("span");
+    todoText.classList.add("todo-text");
+    todoText.textContent = todoData.todo;
+
+    const deleteButton = document.createElement("button");
+    deleteButton.classList.add("todo-delete-button");
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => this.deleteTodoItem(todoId));
+
+    const updateButton = document.createElement("button");
+    updateButton.classList.add("todo-update-button");
+    updateButton.textContent = "Update";
+    updateButton.addEventListener("click", () => {
+      const newTodoText = prompt("Update todo:", todoData.todo);
+      if (newTodoText) {
+        this.updateTodoItem(todoId, newTodoText);
+      }
+    });
+
+    todoItem.appendChild(todoText);
+    todoItem.appendChild(updateButton);
+    todoItem.appendChild(deleteButton);
+
+    this.todoList.appendChild(todoItem);
+  }
+
+  async deleteTodoItem(todoId) {
+    try {
+      const todoDoc = doc(db, "todos", todoId);
+      await deleteDoc(todoDoc);
+    } catch (error) {
+      console.error(error.message);
+    }
+  }
+
+  async updateTodoItem(todoId, newTodoText) {
+    try {
+      const todoDoc = doc(db, "todos", todoId);
+      await updateDoc(todoDoc, {
+        todo: newTodoText,
+      });
+    } catch (error) {
+      console.error(error.message);
     }
   }
 }
